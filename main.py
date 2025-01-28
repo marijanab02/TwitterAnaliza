@@ -2,6 +2,10 @@ import pandas as pd
 from transformers import pipeline
 import matplotlib.pyplot as plt
 import numpy as np 
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
+from sklearn.feature_extraction.text import CountVectorizer
 
 def ciscenje_podataka():
     global data
@@ -15,7 +19,7 @@ def ciscenje_podataka():
     # Uklanjanje dupliciranih tweetova
     data = data.drop_duplicates(subset='tweet')
 
-def vizualizacija_po_keywordu(keyword):
+def vizualizacija_po_keywordu(keyword, save=False):
     # Ako je keyword prazan, uzmi sve tweetove
     if keyword == "":
         keyword_data = data.copy()
@@ -46,9 +50,13 @@ def vizualizacija_po_keywordu(keyword):
     for i, count in enumerate(keyword_popularity_counts):
         ax.text(i, count + 5, f'{count} ({popularity_percentages.iloc[i]:.1f}%)', ha='center', fontsize=12, color='black')
 
+    if save:
+        plt.savefig(f'visualisation/vizualizacija_{keyword}.png', bbox_inches='tight')
+        print(f"Graf je spremljen kao 'visualisation/vizualizacija_{keyword}.png'")
+    
     plt.show()
 
-def usporedba_popularnosti_svih_kljucnih_rijeci():
+def usporedba_popularnosti_svih_kljucnih_rijeci(save=False):
     # Izračunaj postotke popularnosti za svaku ključnu riječ
     popularity_data = data.copy()
     popularity_data['popularity'] = popularity_data['likes'].apply(lambda x: 'high' if x > 500 else ('low' if x < 10 else 'middle'))
@@ -73,9 +81,13 @@ def usporedba_popularnosti_svih_kljucnih_rijeci():
         high_percentage = keyword_popularity_percentage.loc[keyword, 'high']
         
         # Prikaz postotka unutar segmenta
-        ax.text(i, low_percentage / 2, f'{low_percentage:.1f}%', ha='center', fontsize=10, color='white')
-        ax.text(i, low_percentage + middle_percentage / 2, f'{middle_percentage:.1f}%', ha='center', fontsize=10, color='white')
-        ax.text(i, low_percentage + middle_percentage + high_percentage / 2, f'{high_percentage:.1f}%', ha='center', fontsize=10, color='white')
+        ax.text(i, low_percentage / 2, f'{low_percentage:.1f}%', ha='center', fontsize=10, color='black')
+        ax.text(i, low_percentage + middle_percentage / 2, f'{middle_percentage:.1f}%', ha='center', fontsize=10, color='black')
+        ax.text(i, low_percentage + middle_percentage + high_percentage / 2, f'{high_percentage:.1f}%', ha='center', fontsize=10, color='black')
+    
+    if save:
+        plt.savefig(f'visualisation/usporedba_popularnosti.png', bbox_inches='tight')
+        print(f"Graf je spremljen kao 'visualisation/usporedba_popularnosti.png'")
     
     plt.tight_layout()
     plt.show()
@@ -117,7 +129,7 @@ def analiziraj_sentiment(data, num_tweets=10):
     print("Analiza sentimenta završena. Rezultati su spremljeni u 'sentiment_results.csv'.")
 
 # Funkcija za vizualizaciju sentimenta kao Pie Chart (bez neutralnih tweetova)
-def sentiment_pie_chart(keyword):
+def sentiment_pie_chart(keyword, save=False):
     # Učitaj rezultate analize sentimenta
     sentiment_df = pd.read_csv('sentiment_results.csv')
     
@@ -138,9 +150,52 @@ def sentiment_pie_chart(keyword):
         sentiment_counts['NEGATIVE'] = 0
     # Vizualizacija pie chart-a s novim bojama (pozitivno zeleno, negativno crveno)
     sentiment_counts.plot(kind='pie', autopct='%1.1f%%', startangle=90, colors=['red', 'green'])
+
     plt.title(f'Sentiment analiza za keyword: {keyword}')
     plt.ylabel('')  # Ukloniti labelu jer nije potrebna
+
+    if save:
+        plt.savefig(f'visualisation/sentiment_{keyword}.png', bbox_inches='tight')
+        print(f"Graf je spremljen kao 'visualisation/sentiment_{keyword}.png'")
+    
+
     plt.show()
+
+
+def treniranje_predikcija():
+    data['popularity'] = data['likes'].apply(lambda x: 'high' if x > 500 else ('low' if x < 10 else 'middle'))
+
+    # Kreiranje značajki iz tweetova (npr. broj riječi)
+    vectorizer = CountVectorizer()
+    X = vectorizer.fit_transform(data['tweet'])
+
+    y = data['popularity']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Kreiranje i treniranje modela
+    model = LogisticRegression(max_iter=500)
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+
+    # Generiranje klasifikacijskog izvještaja
+    report = classification_report(y_test, y_pred, output_dict=True)
+    report_df = pd.DataFrame(report).transpose()
+
+    report_df.to_csv('classification_report.csv', index=True)
+    print("Klasifikacijski izvještaj je spremljen u 'classification_report.csv'.")
+
+    test_tweets = data.loc[y_test.index, 'tweet']
+    predictions_df = pd.DataFrame({
+        'Tweet': test_tweets,
+        'Stvarna popularnost': y_test,
+        'Predviđena popularnost': y_pred
+    })
+
+    # Spremanje predviđanja u CSV
+    predictions_df.to_csv('predictions.csv', index=False)
+
+    print("Predviđanja su spremljena u 'predictions.csv'.")
 
 data = pd.read_json('data/tweets.json', lines=True)
 print(data.head())
@@ -153,11 +208,13 @@ print(f"Ukupan broj tweetova: {data.shape[0]}")
 
 
 # Pozivanje funkcije za keyword "COVID-19"
-vizualizacija_po_keywordu("COVID-19")
+vizualizacija_po_keywordu("COVID-19", save=True)
 
 # Pozivanje funkcije za sve tweetove
-vizualizacija_po_keywordu("")
+vizualizacija_po_keywordu("", save=True)
 
-usporedba_popularnosti_svih_kljucnih_rijeci()
+usporedba_popularnosti_svih_kljucnih_rijeci(save=True)
 
-sentiment_pie_chart("Vaccine")
+sentiment_pie_chart("Vaccine", save=True)
+
+treniranje_predikcija()
