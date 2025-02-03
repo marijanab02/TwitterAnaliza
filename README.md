@@ -83,4 +83,5 @@ Spremljeno u visualisation/report.png
 
 
 ## Autori
-**Ivana Stojić i Marijana Bandić**
+- [Ivana Stojić](https://github.com/ivanastojic)
+- [Marijana Bandić](https://github.com/marijanab02)
